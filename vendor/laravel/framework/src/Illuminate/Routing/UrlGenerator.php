@@ -3,16 +3,15 @@
 namespace Illuminate\Routing;
 
 use Closure;
-use Illuminate\Contracts\Routing\UrlGenerator as UrlGeneratorContract;
-use Illuminate\Contracts\Routing\UrlRoutable;
-use Illuminate\Http\Request;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\InteractsWithTime;
 use Illuminate\Support\Str;
-use Illuminate\Support\Traits\Macroable;
+use Illuminate\Http\Request;
 use InvalidArgumentException;
-use Symfony\Component\Routing\Exception\RouteNotFoundException;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Traits\Macroable;
+use Illuminate\Support\InteractsWithTime;
+use Illuminate\Contracts\Routing\UrlRoutable;
+use Illuminate\Contracts\Routing\UrlGenerator as UrlGeneratorContract;
 
 class UrlGenerator implements UrlGeneratorContract
 {
@@ -21,7 +20,7 @@ class UrlGenerator implements UrlGeneratorContract
     /**
      * The route collection.
      *
-     * @var \Illuminate\Routing\RouteCollectionInterface
+     * @var \Illuminate\Routing\RouteCollection
      */
     protected $routes;
 
@@ -112,12 +111,12 @@ class UrlGenerator implements UrlGeneratorContract
     /**
      * Create a new URL Generator instance.
      *
-     * @param  \Illuminate\Routing\RouteCollectionInterface  $routes
+     * @param  \Illuminate\Routing\RouteCollection  $routes
      * @param  \Illuminate\Http\Request  $request
      * @param  string|null  $assetRoot
      * @return void
      */
-    public function __construct(RouteCollectionInterface $routes, Request $request, $assetRoot = null)
+    public function __construct(RouteCollection $routes, Request $request, $assetRoot = null)
     {
         $this->routes = $routes;
         $this->assetRoot = $assetRoot;
@@ -215,7 +214,7 @@ class UrlGenerator implements UrlGeneratorContract
      * Generate a secure, absolute URL to the given path.
      *
      * @param  string  $path
-     * @param  array  $parameters
+     * @param  array   $parameters
      * @return string
      */
     public function secure($path, $parameters = [])
@@ -239,7 +238,9 @@ class UrlGenerator implements UrlGeneratorContract
         // Once we get the root URL, we will check to see if it contains an index.php
         // file in the paths. If it does, we will remove it since it is not needed
         // for asset paths, but only for routes to endpoints in the application.
-        $root = $this->assetRoot ?: $this->formatRoot($this->formatScheme($secure));
+        $root = $this->assetRoot
+                    ? $this->assetRoot
+                    : $this->formatRoot($this->formatScheme($secure));
 
         return $this->removeIndex($root).'/'.trim($path, '/');
     }
@@ -309,22 +310,14 @@ class UrlGenerator implements UrlGeneratorContract
      * Create a signed route URL for a named route.
      *
      * @param  string  $name
-     * @param  mixed  $parameters
+     * @param  array  $parameters
      * @param  \DateTimeInterface|\DateInterval|int|null  $expiration
      * @param  bool  $absolute
      * @return string
-     *
-     * @throws \InvalidArgumentException
      */
     public function signedRoute($name, $parameters = [], $expiration = null, $absolute = true)
     {
-        $parameters = Arr::wrap($parameters);
-
-        if (array_key_exists('signature', $parameters)) {
-            throw new InvalidArgumentException(
-                '"Signature" is a reserved parameter when generating signed routes. Please rename your route parameter.'
-            );
-        }
+        $parameters = $this->formatParameters($parameters);
 
         if ($expiration) {
             $parameters = $parameters + ['expires' => $this->availableAt($expiration)];
@@ -362,61 +355,29 @@ class UrlGenerator implements UrlGeneratorContract
      */
     public function hasValidSignature(Request $request, $absolute = true)
     {
-        return $this->hasCorrectSignature($request, $absolute)
-            && $this->signatureHasNotExpired($request);
-    }
-
-    /**
-     * Determine if the given request has a valid signature for a relative URL.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return bool
-     */
-    public function hasValidRelativeSignature(Request $request)
-    {
-        return $this->hasValidSignature($request, false);
-    }
-
-    /**
-     * Determine if the signature from the given request matches the URL.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  bool  $absolute
-     * @return bool
-     */
-    public function hasCorrectSignature(Request $request, $absolute = true)
-    {
         $url = $absolute ? $request->url() : '/'.$request->path();
 
-        $queryString = ltrim(preg_replace('/(^|&)signature=[^&]+/', '', $request->server->get('QUERY_STRING')), '&');
+        $original = rtrim($url.'?'.Arr::query(
+            Arr::except($request->query(), 'signature')
+        ), '?');
 
-        $signature = hash_hmac('sha256', rtrim($url.'?'.$queryString, '?'), call_user_func($this->keyResolver));
-
-        return hash_equals($signature, (string) $request->query('signature', ''));
-    }
-
-    /**
-     * Determine if the expires timestamp from the given request is not from the past.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @return bool
-     */
-    public function signatureHasNotExpired(Request $request)
-    {
         $expires = $request->query('expires');
 
-        return ! ($expires && Carbon::now()->getTimestamp() > $expires);
+        $signature = hash_hmac('sha256', $original, call_user_func($this->keyResolver));
+
+        return hash_equals($signature, (string) $request->query('signature', '')) &&
+               ! ($expires && Carbon::now()->getTimestamp() > $expires);
     }
 
     /**
      * Get the URL to a named route.
      *
      * @param  string  $name
-     * @param  mixed  $parameters
+     * @param  mixed   $parameters
      * @param  bool  $absolute
      * @return string
      *
-     * @throws \Symfony\Component\Routing\Exception\RouteNotFoundException
+     * @throws \InvalidArgumentException
      */
     public function route($name, $parameters = [], $absolute = true)
     {
@@ -424,7 +385,7 @@ class UrlGenerator implements UrlGeneratorContract
             return $this->toRoute($route, $parameters, $absolute);
         }
 
-        throw new RouteNotFoundException("Route [{$name}] not defined.");
+        throw new InvalidArgumentException("Route [{$name}] not defined.");
     }
 
     /**
@@ -432,19 +393,13 @@ class UrlGenerator implements UrlGeneratorContract
      *
      * @param  \Illuminate\Routing\Route  $route
      * @param  mixed  $parameters
-     * @param  bool  $absolute
+     * @param  bool   $absolute
      * @return string
      *
      * @throws \Illuminate\Routing\Exceptions\UrlGenerationException
      */
-    public function toRoute($route, $parameters, $absolute)
+    protected function toRoute($route, $parameters, $absolute)
     {
-        $parameters = collect(Arr::wrap($parameters))->map(function ($value, $key) use ($route) {
-            return $value instanceof UrlRoutable && $route->bindingFieldFor($key)
-                    ? $value->{$route->bindingFieldFor($key)}
-                    : $value;
-        })->all();
-
         return $this->routeUrl()->to(
             $route, $this->formatParameters($parameters), $absolute
         );
@@ -454,8 +409,8 @@ class UrlGenerator implements UrlGeneratorContract
      * Get the URL to a controller action.
      *
      * @param  string|array  $action
-     * @param  mixed  $parameters
-     * @param  bool  $absolute
+     * @param  mixed   $parameters
+     * @param  bool    $absolute
      * @return string
      *
      * @throws \InvalidArgumentException
@@ -578,7 +533,7 @@ class UrlGenerator implements UrlGeneratorContract
      */
     public function isValidUrl($path)
     {
-        if (! preg_match('~^(#|//|https?://|(mailto|tel|sms):)~', $path)) {
+        if (! preg_match('~^(#|//|https?://|mailto:|tel:)~', $path)) {
             return filter_var($path, FILTER_VALIDATE_URL) !== false;
         }
 
@@ -623,25 +578,25 @@ class UrlGenerator implements UrlGeneratorContract
     /**
      * Force the scheme for URLs.
      *
-     * @param  string|null  $scheme
+     * @param  string  $scheme
      * @return void
      */
     public function forceScheme($scheme)
     {
         $this->cachedScheme = null;
 
-        $this->forceScheme = $scheme ? $scheme.'://' : null;
+        $this->forceScheme = $scheme.'://';
     }
 
     /**
      * Set the forced root URL.
      *
-     * @param  string|null  $root
+     * @param  string  $root
      * @return void
      */
     public function forceRootUrl($root)
     {
-        $this->forcedRoot = $root ? rtrim($root, '/') : null;
+        $this->forcedRoot = rtrim($root, '/');
 
         $this->cachedRoot = null;
     }
@@ -706,23 +661,16 @@ class UrlGenerator implements UrlGeneratorContract
 
         $this->cachedRoot = null;
         $this->cachedScheme = null;
-
-        tap(optional($this->routeGenerator)->defaultParameters ?: [], function ($defaults) {
-            $this->routeGenerator = null;
-
-            if (! empty($defaults)) {
-                $this->defaults($defaults);
-            }
-        });
+        $this->routeGenerator = null;
     }
 
     /**
      * Set the route collection.
      *
-     * @param  \Illuminate\Routing\RouteCollectionInterface  $routes
+     * @param  \Illuminate\Routing\RouteCollection  $routes
      * @return $this
      */
-    public function setRoutes(RouteCollectionInterface $routes)
+    public function setRoutes(RouteCollection $routes)
     {
         $this->routes = $routes;
 

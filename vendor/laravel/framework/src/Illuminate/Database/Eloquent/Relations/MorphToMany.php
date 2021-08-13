@@ -2,9 +2,9 @@
 
 namespace Illuminate\Database\Eloquent\Relations;
 
-use Illuminate\Database\Eloquent\Builder;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Arr;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Builder;
 
 class MorphToMany extends BelongsToMany
 {
@@ -42,7 +42,7 @@ class MorphToMany extends BelongsToMany
      * @param  string  $relatedPivotKey
      * @param  string  $parentKey
      * @param  string  $relatedKey
-     * @param  string|null  $relationName
+     * @param  string  $relationName
      * @param  bool  $inverse
      * @return void
      */
@@ -68,7 +68,7 @@ class MorphToMany extends BelongsToMany
     {
         parent::addWhereConstraints();
 
-        $this->query->where($this->qualifyPivotColumn($this->morphType), $this->morphClass);
+        $this->query->where($this->table.'.'.$this->morphType, $this->morphClass);
 
         return $this;
     }
@@ -83,13 +83,13 @@ class MorphToMany extends BelongsToMany
     {
         parent::addEagerConstraints($models);
 
-        $this->query->where($this->qualifyPivotColumn($this->morphType), $this->morphClass);
+        $this->query->where($this->table.'.'.$this->morphType, $this->morphClass);
     }
 
     /**
      * Create a new pivot attachment record.
      *
-     * @param  int  $id
+     * @param  int   $id
      * @param  bool  $timed
      * @return array
      */
@@ -111,23 +111,8 @@ class MorphToMany extends BelongsToMany
     public function getRelationExistenceQuery(Builder $query, Builder $parentQuery, $columns = ['*'])
     {
         return parent::getRelationExistenceQuery($query, $parentQuery, $columns)->where(
-            $this->qualifyPivotColumn($this->morphType), $this->morphClass
+            $this->table.'.'.$this->morphType, $this->morphClass
         );
-    }
-
-    /**
-     * Get the pivot models that are currently attached.
-     *
-     * @return \Illuminate\Support\Collection
-     */
-    protected function getCurrentlyAttachedPivots()
-    {
-        return parent::getCurrentlyAttachedPivots()->map(function ($record) {
-            return $record instanceof MorphPivot
-                            ? $record->setMorphType($this->morphType)
-                                     ->setMorphClass($this->morphClass)
-                            : $record;
-        });
     }
 
     /**
@@ -135,7 +120,7 @@ class MorphToMany extends BelongsToMany
      *
      * @return \Illuminate\Database\Query\Builder
      */
-    public function newPivotQuery()
+    protected function newPivotQuery()
     {
         return parent::newPivotQuery()->where($this->morphType, $this->morphClass);
     }
@@ -144,7 +129,7 @@ class MorphToMany extends BelongsToMany
      * Create a new pivot model instance.
      *
      * @param  array  $attributes
-     * @param  bool  $exists
+     * @param  bool   $exists
      * @return \Illuminate\Database\Eloquent\Relations\Pivot
      */
     public function newPivot(array $attributes = [], $exists = false)
@@ -173,7 +158,7 @@ class MorphToMany extends BelongsToMany
         $defaults = [$this->foreignPivotKey, $this->relatedPivotKey, $this->morphType];
 
         return collect(array_merge($defaults, $this->pivotColumns))->map(function ($column) {
-            return $this->qualifyPivotColumn($column).' as pivot_'.$column;
+            return $this->table.'.'.$column.' as pivot_'.$column;
         })->unique()->all();
     }
 

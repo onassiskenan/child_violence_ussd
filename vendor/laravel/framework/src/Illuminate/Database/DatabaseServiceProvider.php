@@ -2,24 +2,17 @@
 
 namespace Illuminate\Database;
 
-use Doctrine\DBAL\Types\Type;
 use Faker\Factory as FakerFactory;
 use Faker\Generator as FakerGenerator;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\ServiceProvider;
 use Illuminate\Contracts\Queue\EntityResolver;
 use Illuminate\Database\Connectors\ConnectionFactory;
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\QueueEntityResolver;
-use Illuminate\Support\ServiceProvider;
+use Illuminate\Database\Eloquent\Factory as EloquentFactory;
 
 class DatabaseServiceProvider extends ServiceProvider
 {
-    /**
-     * The array of resolved Faker instances.
-     *
-     * @var array
-     */
-    protected static $fakers = [];
-
     /**
      * Bootstrap the application events.
      *
@@ -42,9 +35,10 @@ class DatabaseServiceProvider extends ServiceProvider
         Model::clearBootedModels();
 
         $this->registerConnectionServices();
+
         $this->registerEloquentFactory();
+
         $this->registerQueueableEntityResolver();
-        $this->registerDoctrineTypes();
     }
 
     /**
@@ -71,10 +65,6 @@ class DatabaseServiceProvider extends ServiceProvider
         $this->app->bind('db.connection', function ($app) {
             return $app['db']->connection();
         });
-
-        $this->app->singleton('db.transactions', function ($app) {
-            return new DatabaseTransactionsManager;
-        });
     }
 
     /**
@@ -84,16 +74,14 @@ class DatabaseServiceProvider extends ServiceProvider
      */
     protected function registerEloquentFactory()
     {
-        $this->app->singleton(FakerGenerator::class, function ($app, $parameters) {
-            $locale = $parameters['locale'] ?? $app['config']->get('app.faker_locale', 'en_US');
+        $this->app->singleton(FakerGenerator::class, function ($app) {
+            return FakerFactory::create($app['config']->get('app.faker_locale', 'en_US'));
+        });
 
-            if (! isset(static::$fakers[$locale])) {
-                static::$fakers[$locale] = FakerFactory::create($locale);
-            }
-
-            static::$fakers[$locale]->unique(true);
-
-            return static::$fakers[$locale];
+        $this->app->singleton(EloquentFactory::class, function ($app) {
+            return EloquentFactory::construct(
+                $app->make(FakerGenerator::class), $this->app->databasePath('factories')
+            );
         });
     }
 
@@ -107,25 +95,5 @@ class DatabaseServiceProvider extends ServiceProvider
         $this->app->singleton(EntityResolver::class, function () {
             return new QueueEntityResolver;
         });
-    }
-
-    /**
-     * Register custom types with the Doctrine DBAL library.
-     *
-     * @return void
-     */
-    protected function registerDoctrineTypes()
-    {
-        if (! class_exists(Type::class)) {
-            return;
-        }
-
-        $types = $this->app['config']->get('database.dbal.types', []);
-
-        foreach ($types as $name => $class) {
-            if (! Type::hasType($name)) {
-                Type::addType($name, $class);
-            }
-        }
     }
 }

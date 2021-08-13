@@ -2,14 +2,13 @@
 
 namespace Illuminate\Database\Eloquent\Relations;
 
-use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\Concerns\InteractsWithDictionary;
+use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Database\Eloquent\Relations\Concerns\SupportsDefaultModels;
 
 class HasOneThrough extends HasManyThrough
 {
-    use InteractsWithDictionary, SupportsDefaultModels;
+    use SupportsDefaultModels;
 
     /**
      * Get the results of the relationship.
@@ -24,7 +23,7 @@ class HasOneThrough extends HasManyThrough
     /**
      * Initialize the relation on a set of models.
      *
-     * @param  array  $models
+     * @param  array   $models
      * @param  string  $relation
      * @return array
      */
@@ -40,7 +39,7 @@ class HasOneThrough extends HasManyThrough
     /**
      * Match the eagerly loaded results to their parents.
      *
-     * @param  array  $models
+     * @param  array   $models
      * @param  \Illuminate\Database\Eloquent\Collection  $results
      * @param  string  $relation
      * @return array
@@ -53,7 +52,7 @@ class HasOneThrough extends HasManyThrough
         // link them up with their children using the keyed dictionary to make the
         // matching very convenient and easy work. Then we'll just return them.
         foreach ($models as $model) {
-            if (isset($dictionary[$key = $this->getDictionaryKey($model->getAttribute($this->localKey))])) {
+            if (isset($dictionary[$key = $model->getAttribute($this->localKey)])) {
                 $value = $dictionary[$key];
                 $model->setRelation(
                     $relation, reset($value)

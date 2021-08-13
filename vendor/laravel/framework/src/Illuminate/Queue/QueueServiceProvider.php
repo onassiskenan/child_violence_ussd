@@ -2,21 +2,19 @@
 
 namespace Illuminate\Queue;
 
-use Aws\DynamoDb\DynamoDbClient;
+use Illuminate\Support\Str;
+use Opis\Closure\SerializableClosure;
+use Illuminate\Support\ServiceProvider;
+use Illuminate\Queue\Connectors\SqsConnector;
+use Illuminate\Queue\Connectors\NullConnector;
+use Illuminate\Queue\Connectors\SyncConnector;
+use Illuminate\Queue\Connectors\RedisConnector;
 use Illuminate\Contracts\Debug\ExceptionHandler;
+use Illuminate\Queue\Connectors\DatabaseConnector;
+use Illuminate\Queue\Failed\NullFailedJobProvider;
 use Illuminate\Contracts\Support\DeferrableProvider;
 use Illuminate\Queue\Connectors\BeanstalkdConnector;
-use Illuminate\Queue\Connectors\DatabaseConnector;
-use Illuminate\Queue\Connectors\NullConnector;
-use Illuminate\Queue\Connectors\RedisConnector;
-use Illuminate\Queue\Connectors\SqsConnector;
-use Illuminate\Queue\Connectors\SyncConnector;
 use Illuminate\Queue\Failed\DatabaseFailedJobProvider;
-use Illuminate\Queue\Failed\DatabaseUuidFailedJobProvider;
-use Illuminate\Queue\Failed\DynamoDbFailedJobProvider;
-use Illuminate\Queue\Failed\NullFailedJobProvider;
-use Illuminate\Support\Arr;
-use Illuminate\Support\ServiceProvider;
 
 class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
 {
@@ -32,6 +30,7 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
         $this->registerWorker();
         $this->registerListener();
         $this->registerFailedJobServices();
+        $this->registerOpisSecurityKey();
     }
 
     /**
@@ -161,21 +160,9 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
      */
     protected function registerWorker()
     {
-        $this->app->singleton('queue.worker', function ($app) {
-            $isDownForMaintenance = function () {
-                return $this->app->isDownForMaintenance();
-            };
-
-            $resetScope = function () use ($app) {
-                return $app->forgetScopedInstances();
-            };
-
+        $this->app->singleton('queue.worker', function () {
             return new Worker(
-                $app['queue'],
-                $app['events'],
-                $app[ExceptionHandler::class],
-                $isDownForMaintenance,
-                $resetScope
+                $this->app['queue'], $this->app['events'], $this->app[ExceptionHandler::class]
             );
         });
     }
@@ -187,8 +174,8 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
      */
     protected function registerListener()
     {
-        $this->app->singleton('queue.listener', function ($app) {
-            return new Listener($app->basePath());
+        $this->app->singleton('queue.listener', function () {
+            return new Listener($this->app->basePath());
         });
     }
 
@@ -199,18 +186,12 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
      */
     protected function registerFailedJobServices()
     {
-        $this->app->singleton('queue.failer', function ($app) {
-            $config = $app['config']['queue.failed'];
+        $this->app->singleton('queue.failer', function () {
+            $config = $this->app['config']['queue.failed'];
 
-            if (isset($config['driver']) && $config['driver'] === 'dynamodb') {
-                return $this->dynamoFailedJobProvider($config);
-            } elseif (isset($config['driver']) && $config['driver'] === 'database-uuids') {
-                return $this->databaseUuidFailedJobProvider($config);
-            } elseif (isset($config['table'])) {
-                return $this->databaseFailedJobProvider($config);
-            } else {
-                return new NullFailedJobProvider;
-            }
+            return isset($config['table'])
+                        ? $this->databaseFailedJobProvider($config)
+                        : new NullFailedJobProvider;
         });
     }
 
@@ -228,43 +209,17 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
     }
 
     /**
-     * Create a new database failed job provider that uses UUIDs as IDs.
+     * Configure Opis Closure signing for security.
      *
-     * @param  array  $config
-     * @return \Illuminate\Queue\Failed\DatabaseUuidFailedJobProvider
+     * @return void
      */
-    protected function databaseUuidFailedJobProvider($config)
+    protected function registerOpisSecurityKey()
     {
-        return new DatabaseUuidFailedJobProvider(
-            $this->app['db'], $config['database'], $config['table']
-        );
-    }
-
-    /**
-     * Create a new DynamoDb failed job provider.
-     *
-     * @param  array  $config
-     * @return \Illuminate\Queue\Failed\DynamoDbFailedJobProvider
-     */
-    protected function dynamoFailedJobProvider($config)
-    {
-        $dynamoConfig = [
-            'region' => $config['region'],
-            'version' => 'latest',
-            'endpoint' => $config['endpoint'] ?? null,
-        ];
-
-        if (! empty($config['key']) && ! empty($config['secret'])) {
-            $dynamoConfig['credentials'] = Arr::only(
-                $config, ['key', 'secret', 'token']
-            );
+        if (Str::startsWith($key = $this->app['config']->get('app.key'), 'base64:')) {
+            $key = base64_decode(substr($key, 7));
         }
 
-        return new DynamoDbFailedJobProvider(
-            new DynamoDbClient($dynamoConfig),
-            $this->app['config']['app.name'],
-            $config['table']
-        );
+        SerializableClosure::setSecretKey($key);
     }
 
     /**
@@ -275,11 +230,8 @@ class QueueServiceProvider extends ServiceProvider implements DeferrableProvider
     public function provides()
     {
         return [
-            'queue',
-            'queue.connection',
-            'queue.failer',
-            'queue.listener',
-            'queue.worker',
+            'queue', 'queue.worker', 'queue.listener',
+            'queue.failer', 'queue.connection',
         ];
     }
 }

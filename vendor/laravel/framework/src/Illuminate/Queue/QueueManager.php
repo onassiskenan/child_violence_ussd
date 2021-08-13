@@ -3,9 +3,9 @@
 namespace Illuminate\Queue;
 
 use Closure;
+use InvalidArgumentException;
 use Illuminate\Contracts\Queue\Factory as FactoryContract;
 use Illuminate\Contracts\Queue\Monitor as MonitorContract;
-use InvalidArgumentException;
 
 /**
  * @mixin \Illuminate\Contracts\Queue\Queue
@@ -169,7 +169,7 @@ class QueueManager implements FactoryContract, MonitorContract
     protected function getConnector($driver)
     {
         if (! isset($this->connectors[$driver])) {
-            throw new InvalidArgumentException("No connector for [$driver].");
+            throw new InvalidArgumentException("No connector for [$driver]");
         }
 
         return call_user_func($this->connectors[$driver]);
@@ -178,7 +178,7 @@ class QueueManager implements FactoryContract, MonitorContract
     /**
      * Add a queue connection resolver.
      *
-     * @param  string  $driver
+     * @param  string    $driver
      * @param  \Closure  $resolver
      * @return void
      */
@@ -190,7 +190,7 @@ class QueueManager implements FactoryContract, MonitorContract
     /**
      * Add a queue connection resolver.
      *
-     * @param  string  $driver
+     * @param  string    $driver
      * @param  \Closure  $resolver
      * @return void
      */
@@ -247,37 +247,20 @@ class QueueManager implements FactoryContract, MonitorContract
     }
 
     /**
-     * Get the application instance used by the manager.
+     * Determine if the application is in maintenance mode.
      *
-     * @return \Illuminate\Contracts\Foundation\Application
+     * @return bool
      */
-    public function getApplication()
+    public function isDownForMaintenance()
     {
-        return $this->app;
-    }
-
-    /**
-     * Set the application instance used by the manager.
-     *
-     * @param  \Illuminate\Contracts\Foundation\Application  $app
-     * @return $this
-     */
-    public function setApplication($app)
-    {
-        $this->app = $app;
-
-        foreach ($this->connections as $connection) {
-            $connection->setContainer($app);
-        }
-
-        return $this;
+        return $this->app->isDownForMaintenance();
     }
 
     /**
      * Dynamically pass calls to the default connection.
      *
      * @param  string  $method
-     * @param  array  $parameters
+     * @param  array   $parameters
      * @return mixed
      */
     public function __call($method, $parameters)

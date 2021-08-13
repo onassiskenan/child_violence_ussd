@@ -3,38 +3,17 @@
 namespace Illuminate\Http;
 
 use ArrayObject;
-use Illuminate\Contracts\Support\Arrayable;
-use Illuminate\Contracts\Support\Jsonable;
-use Illuminate\Contracts\Support\Renderable;
-use Illuminate\Support\Traits\Macroable;
-use InvalidArgumentException;
 use JsonSerializable;
-use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
-use Symfony\Component\HttpFoundation\ResponseHeaderBag;
+use Illuminate\Support\Traits\Macroable;
+use Illuminate\Contracts\Support\Jsonable;
+use Illuminate\Contracts\Support\Arrayable;
+use Illuminate\Contracts\Support\Renderable;
+use Symfony\Component\HttpFoundation\Response as BaseResponse;
 
-class Response extends SymfonyResponse
+class Response extends BaseResponse
 {
     use ResponseTrait, Macroable {
         Macroable::__call as macroCall;
-    }
-
-    /**
-     * Create a new HTTP response.
-     *
-     * @param  mixed  $content
-     * @param  int  $status
-     * @param  array  $headers
-     * @return void
-     *
-     * @throws \InvalidArgumentException
-     */
-    public function __construct($content = '', $status = 200, array $headers = [])
-    {
-        $this->headers = new ResponseHeaderBag($headers);
-
-        $this->setContent($content);
-        $this->setStatusCode($status);
-        $this->setProtocolVersion('1.0');
     }
 
     /**
@@ -42,8 +21,6 @@ class Response extends SymfonyResponse
      *
      * @param  mixed  $content
      * @return $this
-     *
-     * @throws \InvalidArgumentException
      */
     public function setContent($content)
     {
@@ -56,10 +33,6 @@ class Response extends SymfonyResponse
             $this->header('Content-Type', 'application/json');
 
             $content = $this->morphToJson($content);
-
-            if ($content === false) {
-                throw new InvalidArgumentException(json_last_error_msg());
-            }
         }
 
         // If this content implements the "Renderable" interface then we will call the
@@ -92,7 +65,7 @@ class Response extends SymfonyResponse
     /**
      * Morph the given content into JSON.
      *
-     * @param  mixed  $content
+     * @param  mixed   $content
      * @return string
      */
     protected function morphToJson($content)

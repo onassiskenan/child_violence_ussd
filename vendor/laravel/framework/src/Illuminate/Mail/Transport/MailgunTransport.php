@@ -2,8 +2,8 @@
 
 namespace Illuminate\Mail\Transport;
 
-use GuzzleHttp\ClientInterface;
 use Swift_Mime_SimpleMessage;
+use GuzzleHttp\ClientInterface;
 
 class MailgunTransport extends Transport
 {
@@ -62,8 +62,6 @@ class MailgunTransport extends Transport
 
         $to = $this->getTo($message);
 
-        $bcc = $message->getBcc();
-
         $message->setBcc([]);
 
         $response = $this->client->request(
@@ -72,12 +70,9 @@ class MailgunTransport extends Transport
             $this->payload($message, $to)
         );
 
-        $messageId = $this->getMessageId($response);
-
-        $message->getHeaders()->addTextHeader('X-Message-ID', $messageId);
-        $message->getHeaders()->addTextHeader('X-Mailgun-Message-ID', $messageId);
-
-        $message->setBcc($bcc);
+        $message->getHeaders()->addTextHeader(
+            'X-Mailgun-Message-ID', $this->getMessageId($response)
+        );
 
         $this->sendPerformed($message);
 

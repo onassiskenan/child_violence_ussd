@@ -2,8 +2,8 @@
 
 namespace Illuminate\Database\Console\Migrations;
 
-use Illuminate\Database\Migrations\Migrator;
 use Illuminate\Support\Collection;
+use Illuminate\Database\Migrations\Migrator;
 use Symfony\Component\Console\Input\InputOption;
 
 class StatusCommand extends BaseCommand
@@ -32,7 +32,7 @@ class StatusCommand extends BaseCommand
     /**
      * Create a new migration rollback command instance.
      *
-     * @param  \Illuminate\Database\Migrations\Migrator  $migrator
+     * @param  \Illuminate\Database\Migrations\Migrator $migrator
      * @return void
      */
     public function __construct(Migrator $migrator)
@@ -45,27 +45,25 @@ class StatusCommand extends BaseCommand
     /**
      * Execute the console command.
      *
-     * @return int|null
+     * @return void
      */
     public function handle()
     {
-        return $this->migrator->usingConnection($this->option('database'), function () {
-            if (! $this->migrator->repositoryExists()) {
-                $this->error('Migration table not found.');
+        $this->migrator->setConnection($this->option('database'));
 
-                return 1;
-            }
+        if (! $this->migrator->repositoryExists()) {
+            return $this->error('Migration table not found.');
+        }
 
-            $ran = $this->migrator->getRepository()->getRan();
+        $ran = $this->migrator->getRepository()->getRan();
 
-            $batches = $this->migrator->getRepository()->getMigrationBatches();
+        $batches = $this->migrator->getRepository()->getMigrationBatches();
 
-            if (count($migrations = $this->getStatusFor($ran, $batches)) > 0) {
-                $this->table(['Ran?', 'Migration', 'Batch'], $migrations);
-            } else {
-                $this->error('No migrations found');
-            }
-        });
+        if (count($migrations = $this->getStatusFor($ran, $batches)) > 0) {
+            $this->table(['Ran?', 'Migration', 'Batch'], $migrations);
+        } else {
+            $this->error('No migrations found');
+        }
     }
 
     /**

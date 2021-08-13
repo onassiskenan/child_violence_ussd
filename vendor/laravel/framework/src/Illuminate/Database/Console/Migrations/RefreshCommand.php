@@ -4,8 +4,6 @@ namespace Illuminate\Database\Console\Migrations;
 
 use Illuminate\Console\Command;
 use Illuminate\Console\ConfirmableTrait;
-use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Database\Events\DatabaseRefreshed;
 use Symfony\Component\Console\Input\InputOption;
 
 class RefreshCommand extends Command
@@ -29,12 +27,12 @@ class RefreshCommand extends Command
     /**
      * Execute the console command.
      *
-     * @return int
+     * @return void
      */
     public function handle()
     {
         if (! $this->confirmToProceed()) {
-            return 1;
+            return;
         }
 
         // Next we'll gather some of the options so that we can have the right options
@@ -65,17 +63,9 @@ class RefreshCommand extends Command
             '--force' => true,
         ]));
 
-        if ($this->laravel->bound(Dispatcher::class)) {
-            $this->laravel[Dispatcher::class]->dispatch(
-                new DatabaseRefreshed
-            );
-        }
-
         if ($this->needsSeeding()) {
             $this->runSeeder($database);
         }
-
-        return 0;
     }
 
     /**
@@ -134,7 +124,7 @@ class RefreshCommand extends Command
     {
         $this->call('db:seed', array_filter([
             '--database' => $database,
-            '--class' => $this->option('seeder') ?: 'Database\\Seeders\\DatabaseSeeder',
+            '--class' => $this->option('seeder') ?: 'DatabaseSeeder',
             '--force' => true,
         ]));
     }
@@ -148,11 +138,17 @@ class RefreshCommand extends Command
     {
         return [
             ['database', null, InputOption::VALUE_OPTIONAL, 'The database connection to use'],
+
             ['force', null, InputOption::VALUE_NONE, 'Force the operation to run when in production'],
-            ['path', null, InputOption::VALUE_OPTIONAL | InputOption::VALUE_IS_ARRAY, 'The path(s) to the migrations files to be executed'],
+
+            ['path', null, InputOption::VALUE_OPTIONAL, 'The path to the migrations files to be executed'],
+
             ['realpath', null, InputOption::VALUE_NONE, 'Indicate any provided migration file paths are pre-resolved absolute paths'],
+
             ['seed', null, InputOption::VALUE_NONE, 'Indicates if the seed task should be re-run'],
+
             ['seeder', null, InputOption::VALUE_OPTIONAL, 'The class name of the root seeder'],
+
             ['step', null, InputOption::VALUE_OPTIONAL, 'The number of migrations to be reverted & re-run'],
         ];
     }

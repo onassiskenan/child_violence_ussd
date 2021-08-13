@@ -2,12 +2,12 @@
 
 namespace App\Http\Controllers\Auth;
 
+use App\Location;
+use App\User;
 use App\Http\Controllers\Controller;
-use App\Providers\RouteServiceProvider;
-use App\Models\User;
-use Illuminate\Foundation\Auth\RegistersUsers;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Foundation\Auth\RegistersUsers;
 
 class RegisterController extends Controller
 {
@@ -29,7 +29,7 @@ class RegisterController extends Controller
      *
      * @var string
      */
-    protected $redirectTo = RouteServiceProvider::HOME;
+    protected $redirectTo = '/home';
 
     /**
      * Create a new controller instance.
@@ -50,9 +50,17 @@ class RegisterController extends Controller
     protected function validator(array $data)
     {
         return Validator::make($data, [
-            'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users'],
+            // 'phone' => ['required','min:10', 'max:20', 'unique:users'],
+            // 'name' => ['required', 'max:255'],
+
+            // 'region' => ['required',  'max:255'],   
+            // 'ditrict' => ['required',  'max:255'],
+            // 'ward' => ['required', 'max:255'],
+
+            // 'option' => ['required'],
+
             'password' => ['required', 'string', 'min:8', 'confirmed'],
+
         ]);
     }
 
@@ -60,14 +68,41 @@ class RegisterController extends Controller
      * Create a new user instance after a valid registration.
      *
      * @param  array  $data
-     * @return \App\Models\User
+     * @return \App\User
      */
     protected function create(array $data)
     {
-        return User::create([
-            'name' => $data['name'],
-            'email' => $data['email'],
-            'password' => Hash::make($data['password']),
-        ]);
+        $user = new User;
+        $user->name = $data['name'];
+        $user->email = $data['email'];
+        $user->password = Hash::make($data['password']);
+        $user->save();
+         
+        $userLocation = new Location;
+        $userLocation->userID = $user->id;
+        $userLocation->region = $data['region'];
+        $userLocation->district = $data['district'];
+        $userLocation->ward = $data['ward'];
+        $userLocation->save();
+            
+        // bu
+        if($data['option'] == 'Peasant'){
+            $userRoles = User::find($user->id);
+            $userRoles->roles()->attach(5);     
+           
+        }
+        else{
+            $userRoles = User::find($user->id);
+            $userRoles->roles()->attach(1);     
+           
+        }
+        // roles
+        //buyer = 1
+        // peasant = 2
+        // crerk = 3
+        // market officer = 4
+        // sysAdmin = 5
+                return $user;
+
     }
 }

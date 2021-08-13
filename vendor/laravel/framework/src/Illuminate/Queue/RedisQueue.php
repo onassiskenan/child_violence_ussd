@@ -2,13 +2,12 @@
 
 namespace Illuminate\Queue;
 
-use Illuminate\Contracts\Queue\ClearableQueue;
-use Illuminate\Contracts\Queue\Queue as QueueContract;
-use Illuminate\Contracts\Redis\Factory as Redis;
-use Illuminate\Queue\Jobs\RedisJob;
 use Illuminate\Support\Str;
+use Illuminate\Queue\Jobs\RedisJob;
+use Illuminate\Contracts\Redis\Factory as Redis;
+use Illuminate\Contracts\Queue\Queue as QueueContract;
 
-class RedisQueue extends Queue implements QueueContract, ClearableQueue
+class RedisQueue extends Queue implements QueueContract
 {
     /**
      * The Redis factory implementation.
@@ -53,22 +52,15 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
      * @param  string|null  $connection
      * @param  int  $retryAfter
      * @param  int|null  $blockFor
-     * @param  bool  $dispatchAfterCommit
      * @return void
      */
-    public function __construct(Redis $redis,
-                                $default = 'default',
-                                $connection = null,
-                                $retryAfter = 60,
-                                $blockFor = null,
-                                $dispatchAfterCommit = false)
+    public function __construct(Redis $redis, $default = 'default', $connection = null, $retryAfter = 60, $blockFor = null)
     {
         $this->redis = $redis;
         $this->default = $default;
         $this->blockFor = $blockFor;
         $this->connection = $connection;
         $this->retryAfter = $retryAfter;
-        $this->dispatchAfterCommit = $dispatchAfterCommit;
     }
 
     /**
@@ -87,43 +79,16 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Push an array of jobs onto the queue.
-     *
-     * @param  array  $jobs
-     * @param  mixed  $data
-     * @param  string|null  $queue
-     * @return void
-     */
-    public function bulk($jobs, $data = '', $queue = null)
-    {
-        $this->getConnection()->pipeline(function () use ($jobs, $data, $queue) {
-            $this->getConnection()->transaction(function () use ($jobs, $data, $queue) {
-                foreach ((array) $jobs as $job) {
-                    $this->push($job, $data, $queue);
-                }
-            });
-        });
-    }
-
-    /**
      * Push a new job onto the queue.
      *
      * @param  object|string  $job
-     * @param  mixed  $data
+     * @param  mixed   $data
      * @param  string|null  $queue
      * @return mixed
      */
     public function push($job, $data = '', $queue = null)
     {
-        return $this->enqueueUsing(
-            $job,
-            $this->createPayload($job, $this->getQueue($queue), $data),
-            $queue,
-            null,
-            function ($payload, $queue) {
-                return $this->pushRaw($payload, $queue);
-            }
-        );
+        return $this->pushRaw($this->createPayload($job, $this->getQueue($queue), $data), $queue);
     }
 
     /**
@@ -131,7 +96,7 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
      *
      * @param  string  $payload
      * @param  string|null  $queue
-     * @param  array  $options
+     * @param  array   $options
      * @return mixed
      */
     public function pushRaw($payload, $queue = null, array $options = [])
@@ -149,21 +114,13 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
      *
      * @param  \DateTimeInterface|\DateInterval|int  $delay
      * @param  object|string  $job
-     * @param  mixed  $data
+     * @param  mixed   $data
      * @param  string|null  $queue
      * @return mixed
      */
     public function later($delay, $job, $data = '', $queue = null)
     {
-        return $this->enqueueUsing(
-            $job,
-            $this->createPayload($job, $this->getQueue($queue), $data),
-            $queue,
-            $delay,
-            function ($payload, $queue, $delay) {
-                return $this->laterRaw($delay, $payload, $queue);
-            }
-        );
+        return $this->laterRaw($delay, $this->createPayload($job, $this->getQueue($queue), $data), $queue);
     }
 
     /**
@@ -187,9 +144,9 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
      * Create a payload string from the given job and data.
      *
      * @param  string  $job
-     * @param  string  $queue
-     * @param  mixed  $data
-     * @return array
+     * @param  string   $queue
+     * @param  mixed   $data
+     * @return string
      */
     protected function createPayloadArray($job, $queue, $data = '')
     {
@@ -209,7 +166,11 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
     {
         $this->migrate($prefixed = $this->getQueue($queue));
 
-        [$job, $reserved] = $this->retrieveNextJob($prefixed);
+        if (empty($nextJob = $this->retrieveNextJob($prefixed))) {
+            return;
+        }
+
+        [$job, $reserved] = $nextJob;
 
         if ($reserved) {
             return new RedisJob(
@@ -307,22 +268,6 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
     }
 
     /**
-     * Delete all of the jobs from the queue.
-     *
-     * @param  string  $queue
-     * @return int
-     */
-    public function clear($queue)
-    {
-        $queue = $this->getQueue($queue);
-
-        return $this->getConnection()->eval(
-            LuaScripts::clear(), 4, $queue, $queue.':delayed',
-            $queue.':reserved', $queue.':notify'
-        );
-    }
-
-    /**
      * Get a random ID string.
      *
      * @return string
@@ -348,7 +293,7 @@ class RedisQueue extends Queue implements QueueContract, ClearableQueue
      *
      * @return \Illuminate\Redis\Connections\Connection
      */
-    public function getConnection()
+    protected function getConnection()
     {
         return $this->redis->connection($this->connection);
     }

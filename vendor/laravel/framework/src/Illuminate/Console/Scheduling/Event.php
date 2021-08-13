@@ -4,24 +4,18 @@ namespace Illuminate\Console\Scheduling;
 
 use Closure;
 use Cron\CronExpression;
-use GuzzleHttp\Client as HttpClient;
-use GuzzleHttp\Exception\TransferException;
-use Illuminate\Contracts\Container\Container;
-use Illuminate\Contracts\Debug\ExceptionHandler;
-use Illuminate\Contracts\Mail\Mailer;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
+use GuzzleHttp\Client as HttpClient;
 use Illuminate\Support\Facades\Date;
-use Illuminate\Support\Reflector;
-use Illuminate\Support\Stringable;
-use Illuminate\Support\Traits\Macroable;
-use Illuminate\Support\Traits\ReflectsClosures;
-use Psr\Http\Client\ClientExceptionInterface;
+use Illuminate\Contracts\Mail\Mailer;
 use Symfony\Component\Process\Process;
+use Illuminate\Support\Traits\Macroable;
+use Illuminate\Contracts\Container\Container;
 
 class Event
 {
-    use Macroable, ManagesFrequencies, ReflectsClosures;
+    use Macroable, ManagesFrequencies;
 
     /**
      * The command string.
@@ -87,7 +81,7 @@ class Event
     public $expiresAt = 1440;
 
     /**
-     * Indicates if the command should run in the background.
+     * Indicates if the command should run in background.
      *
      * @var bool
      */
@@ -161,7 +155,7 @@ class Event
      *
      * @param  \Illuminate\Console\Scheduling\EventMutex  $mutex
      * @param  string  $command
-     * @param  \DateTimeZone|string|null  $timezone
+     * @param  \DateTimeZone|string|null $timezone
      * @return void
      */
     public function __construct(EventMutex $mutex, $command, $timezone = null)
@@ -266,20 +260,6 @@ class Event
     }
 
     /**
-     * Call all of the "after" callbacks for the event.
-     *
-     * @param  \Illuminate\Contracts\Container\Container  $container
-     * @param  int  $exitCode
-     * @return void
-     */
-    public function callAfterCallbacksWithExitCode(Container $container, $exitCode)
-    {
-        $this->exitCode = (int) $exitCode;
-
-        $this->callAfterCallbacks($container);
-    }
-
-    /**
      * Build the command string.
      *
      * @return string
@@ -328,7 +308,7 @@ class Event
             $date->setTimezone($this->timezone);
         }
 
-        return (new CronExpression($this->expression))->isDue($date->toDateTimeString());
+        return CronExpression::factory($this->expression)->isDue($date->toDateTimeString());
     }
 
     /**
@@ -476,7 +456,7 @@ class Event
      */
     protected function emailOutput(Mailer $mailer, $addresses, $onlyIfOutputExists = false)
     {
-        $text = is_file($this->output) ? file_get_contents($this->output) : '';
+        $text = file_exists($this->output) ? file_get_contents($this->output) : '';
 
         if ($onlyIfOutputExists && empty($text)) {
             return;
@@ -509,7 +489,9 @@ class Event
      */
     public function pingBefore($url)
     {
-        return $this->before($this->pingCallback($url));
+        return $this->before(function () use ($url) {
+            (new HttpClient)->get($url);
+        });
     }
 
     /**
@@ -532,7 +514,9 @@ class Event
      */
     public function thenPing($url)
     {
-        return $this->then($this->pingCallback($url));
+        return $this->then(function () use ($url) {
+            (new HttpClient)->get($url);
+        });
     }
 
     /**
@@ -555,7 +539,9 @@ class Event
      */
     public function pingOnSuccess($url)
     {
-        return $this->onSuccess($this->pingCallback($url));
+        return $this->onSuccess(function () use ($url) {
+            (new HttpClient)->get($url);
+        });
     }
 
     /**
@@ -566,28 +552,13 @@ class Event
      */
     public function pingOnFailure($url)
     {
-        return $this->onFailure($this->pingCallback($url));
+        return $this->onFailure(function () use ($url) {
+            (new HttpClient)->get($url);
+        });
     }
 
     /**
-     * Get the callback that pings the given URL.
-     *
-     * @param  string  $url
-     * @return \Closure
-     */
-    protected function pingCallback($url)
-    {
-        return function (Container $container, HttpClient $http) use ($url) {
-            try {
-                $http->request('GET', $url);
-            } catch (ClientExceptionInterface | TransferException $e) {
-                $container->make(ExceptionHandler::class)->report($e);
-            }
-        };
-    }
-
-    /**
-     * State that the command should run in the background.
+     * State that the command should run in background.
      *
      * @return $this
      */
@@ -675,7 +646,7 @@ class Event
      */
     public function when($callback)
     {
-        $this->filters[] = Reflector::isCallable($callback) ? $callback : function () use ($callback) {
+        $this->filters[] = is_callable($callback) ? $callback : function () use ($callback) {
             return $callback;
         };
 
@@ -690,7 +661,7 @@ class Event
      */
     public function skip($callback)
     {
-        $this->rejects[] = Reflector::isCallable($callback) ? $callback : function () use ($callback) {
+        $this->rejects[] = is_callable($callback) ? $callback : function () use ($callback) {
             return $callback;
         };
 
@@ -729,29 +700,9 @@ class Event
      */
     public function then(Closure $callback)
     {
-        $parameters = $this->closureParameterTypes($callback);
-
-        if (Arr::get($parameters, 'output') === Stringable::class) {
-            return $this->thenWithOutput($callback);
-        }
-
         $this->afterCallbacks[] = $callback;
 
         return $this;
-    }
-
-    /**
-     * Register a callback that uses the output after the job runs.
-     *
-     * @param  \Closure  $callback
-     * @param  bool  $onlyIfOutputExists
-     * @return $this
-     */
-    public function thenWithOutput(Closure $callback, $onlyIfOutputExists = false)
-    {
-        $this->ensureOutputIsBeingCaptured();
-
-        return $this->then($this->withOutputCallback($callback, $onlyIfOutputExists));
     }
 
     /**
@@ -762,31 +713,11 @@ class Event
      */
     public function onSuccess(Closure $callback)
     {
-        $parameters = $this->closureParameterTypes($callback);
-
-        if (Arr::get($parameters, 'output') === Stringable::class) {
-            return $this->onSuccessWithOutput($callback);
-        }
-
         return $this->then(function (Container $container) use ($callback) {
             if (0 === $this->exitCode) {
                 $container->call($callback);
             }
         });
-    }
-
-    /**
-     * Register a callback that uses the output if the operation succeeds.
-     *
-     * @param  \Closure  $callback
-     * @param  bool  $onlyIfOutputExists
-     * @return $this
-     */
-    public function onSuccessWithOutput(Closure $callback, $onlyIfOutputExists = false)
-    {
-        $this->ensureOutputIsBeingCaptured();
-
-        return $this->onSuccess($this->withOutputCallback($callback, $onlyIfOutputExists));
     }
 
     /**
@@ -797,49 +728,11 @@ class Event
      */
     public function onFailure(Closure $callback)
     {
-        $parameters = $this->closureParameterTypes($callback);
-
-        if (Arr::get($parameters, 'output') === Stringable::class) {
-            return $this->onFailureWithOutput($callback);
-        }
-
         return $this->then(function (Container $container) use ($callback) {
             if (0 !== $this->exitCode) {
                 $container->call($callback);
             }
         });
-    }
-
-    /**
-     * Register a callback that uses the output if the operation fails.
-     *
-     * @param  \Closure  $callback
-     * @param  bool  $onlyIfOutputExists
-     * @return $this
-     */
-    public function onFailureWithOutput(Closure $callback, $onlyIfOutputExists = false)
-    {
-        $this->ensureOutputIsBeingCaptured();
-
-        return $this->onFailure($this->withOutputCallback($callback, $onlyIfOutputExists));
-    }
-
-    /**
-     * Get a callback that provides output.
-     *
-     * @param  \Closure  $callback
-     * @param  bool  $onlyIfOutputExists
-     * @return \Closure
-     */
-    protected function withOutputCallback(Closure $callback, $onlyIfOutputExists = false)
-    {
-        return function (Container $container) use ($callback, $onlyIfOutputExists) {
-            $output = $this->output && is_file($this->output) ? file_get_contents($this->output) : '';
-
-            return $onlyIfOutputExists && empty($output)
-                            ? null
-                            : $container->call($callback, ['output' => new Stringable($output)]);
-        };
     }
 
     /**
@@ -890,8 +783,9 @@ class Event
      */
     public function nextRunDate($currentTime = 'now', $nth = 0, $allowCurrentDate = false)
     {
-        return Date::instance((new CronExpression($this->getExpression()))
-            ->getNextRunDate($currentTime, $nth, $allowCurrentDate, $this->timezone));
+        return Date::instance(CronExpression::factory(
+            $this->getExpression()
+        )->getNextRunDate($currentTime, $nth, $allowCurrentDate, $this->timezone));
     }
 
     /**

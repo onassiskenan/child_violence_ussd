@@ -2,11 +2,11 @@
 
 namespace Illuminate\Notifications\Channels;
 
-use Illuminate\Contracts\Events\Dispatcher;
-use Illuminate\Notifications\Events\BroadcastNotificationCreated;
-use Illuminate\Notifications\Messages\BroadcastMessage;
-use Illuminate\Notifications\Notification;
 use RuntimeException;
+use Illuminate\Notifications\Notification;
+use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Notifications\Messages\BroadcastMessage;
+use Illuminate\Notifications\Events\BroadcastNotificationCreated;
 
 class BroadcastChannel
 {
@@ -18,7 +18,7 @@ class BroadcastChannel
     protected $events;
 
     /**
-     * Create a new broadcast channel.
+     * Create a new database channel.
      *
      * @param  \Illuminate\Contracts\Events\Dispatcher  $events
      * @return void

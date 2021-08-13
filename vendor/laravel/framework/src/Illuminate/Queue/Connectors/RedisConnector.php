@@ -2,8 +2,8 @@
 
 namespace Illuminate\Queue\Connectors;
 
-use Illuminate\Contracts\Redis\Factory as Redis;
 use Illuminate\Queue\RedisQueue;
+use Illuminate\Contracts\Redis\Factory as Redis;
 
 class RedisConnector implements ConnectorInterface
 {
@@ -46,8 +46,7 @@ class RedisConnector implements ConnectorInterface
             $this->redis, $config['queue'],
             $config['connection'] ?? $this->connection,
             $config['retry_after'] ?? 60,
-            $config['block_for'] ?? null,
-            $config['after_commit'] ?? null
+            $config['block_for'] ?? null
         );
     }
 }

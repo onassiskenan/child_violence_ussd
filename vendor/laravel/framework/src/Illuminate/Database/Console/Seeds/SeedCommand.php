@@ -3,11 +3,10 @@
 namespace Illuminate\Database\Console\Seeds;
 
 use Illuminate\Console\Command;
-use Illuminate\Console\ConfirmableTrait;
-use Illuminate\Database\ConnectionResolverInterface as Resolver;
 use Illuminate\Database\Eloquent\Model;
-use Symfony\Component\Console\Input\InputArgument;
+use Illuminate\Console\ConfirmableTrait;
 use Symfony\Component\Console\Input\InputOption;
+use Illuminate\Database\ConnectionResolverInterface as Resolver;
 
 class SeedCommand extends Command
 {
@@ -50,15 +49,13 @@ class SeedCommand extends Command
     /**
      * Execute the console command.
      *
-     * @return int
+     * @return void
      */
     public function handle()
     {
         if (! $this->confirmToProceed()) {
-            return 1;
+            return;
         }
-
-        $previousConnection = $this->resolver->getDefaultConnection();
 
         $this->resolver->setDefaultConnection($this->getDatabase());
 
@@ -66,13 +63,7 @@ class SeedCommand extends Command
             $this->getSeeder()->__invoke();
         });
 
-        if ($previousConnection) {
-            $this->resolver->setDefaultConnection($previousConnection);
-        }
-
         $this->info('Database seeding completed successfully.');
-
-        return 0;
     }
 
     /**
@@ -82,20 +73,9 @@ class SeedCommand extends Command
      */
     protected function getSeeder()
     {
-        $class = $this->input->getArgument('class') ?? $this->input->getOption('class');
+        $class = $this->laravel->make($this->input->getOption('class'));
 
-        if (strpos($class, '\\') === false) {
-            $class = 'Database\\Seeders\\'.$class;
-        }
-
-        if ($class === 'Database\\Seeders\\DatabaseSeeder' &&
-            ! class_exists($class)) {
-            $class = 'DatabaseSeeder';
-        }
-
-        return $this->laravel->make($class)
-                        ->setContainer($this->laravel)
-                        ->setCommand($this);
+        return $class->setContainer($this->laravel)->setCommand($this);
     }
 
     /**
@@ -111,18 +91,6 @@ class SeedCommand extends Command
     }
 
     /**
-     * Get the console command arguments.
-     *
-     * @return array
-     */
-    protected function getArguments()
-    {
-        return [
-            ['class', InputArgument::OPTIONAL, 'The class name of the root seeder', null],
-        ];
-    }
-
-    /**
      * Get the console command options.
      *
      * @return array
@@ -130,8 +98,10 @@ class SeedCommand extends Command
     protected function getOptions()
     {
         return [
-            ['class', null, InputOption::VALUE_OPTIONAL, 'The class name of the root seeder', 'Database\\Seeders\\DatabaseSeeder'],
+            ['class', null, InputOption::VALUE_OPTIONAL, 'The class name of the root seeder', 'DatabaseSeeder'],
+
             ['database', null, InputOption::VALUE_OPTIONAL, 'The database connection to seed'],
+
             ['force', null, InputOption::VALUE_NONE, 'Force the operation to run when in production'],
         ];
     }

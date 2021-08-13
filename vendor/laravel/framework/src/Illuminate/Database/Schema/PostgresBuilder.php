@@ -5,32 +5,6 @@ namespace Illuminate\Database\Schema;
 class PostgresBuilder extends Builder
 {
     /**
-     * Create a database in the schema.
-     *
-     * @param  string  $name
-     * @return bool
-     */
-    public function createDatabase($name)
-    {
-        return $this->connection->statement(
-            $this->grammar->compileCreateDatabase($name, $this->connection)
-        );
-    }
-
-    /**
-     * Drop a database from the schema if the database exists.
-     *
-     * @param  string  $name
-     * @return bool
-     */
-    public function dropDatabaseIfExists($name)
-    {
-        return $this->connection->statement(
-            $this->grammar->compileDropDatabaseIfExists($name)
-        );
-    }
-
-    /**
      * Determine if the given table exists.
      *
      * @param  string  $table
@@ -56,7 +30,7 @@ class PostgresBuilder extends Builder
     {
         $tables = [];
 
-        $excludedTables = $this->connection->getConfig('dont_drop') ?? ['spatial_ref_sys'];
+        $excludedTables = ['spatial_ref_sys'];
 
         foreach ($this->getAllTables() as $row) {
             $row = (array) $row;
@@ -103,8 +77,6 @@ class PostgresBuilder extends Builder
 
     /**
      * Drop all types from the database.
-     *
-     * @return void
      */
     public function dropAllTypes()
     {
@@ -130,10 +102,10 @@ class PostgresBuilder extends Builder
      *
      * @return array
      */
-    public function getAllTables()
+    protected function getAllTables()
     {
         return $this->connection->select(
-            $this->grammar->compileGetAllTables((array) $this->connection->getConfig('schema'))
+            $this->grammar->compileGetAllTables($this->connection->getConfig('schema'))
         );
     }
 
@@ -142,10 +114,10 @@ class PostgresBuilder extends Builder
      *
      * @return array
      */
-    public function getAllViews()
+    protected function getAllViews()
     {
         return $this->connection->select(
-            $this->grammar->compileGetAllViews((array) $this->connection->getConfig('schema'))
+            $this->grammar->compileGetAllViews($this->connection->getConfig('schema'))
         );
     }
 
@@ -154,7 +126,7 @@ class PostgresBuilder extends Builder
      *
      * @return array
      */
-    public function getAllTypes()
+    protected function getAllTypes()
     {
         return $this->connection->select(
             $this->grammar->compileGetAllTypes()

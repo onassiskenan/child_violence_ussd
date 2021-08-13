@@ -3,11 +3,11 @@
 namespace Illuminate\Validation;
 
 use Closure;
-use Illuminate\Contracts\Validation\Rule as RuleContract;
 use Illuminate\Support\Arr;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Exists;
 use Illuminate\Validation\Rules\Unique;
+use Illuminate\Contracts\Validation\Rule as RuleContract;
 
 class ValidationRuleParser
 {
@@ -131,7 +131,7 @@ class ValidationRuleParser
         foreach ($data as $key => $value) {
             if (Str::startsWith($key, $attribute) || (bool) preg_match('/^'.$pattern.'\z/', $key)) {
                 foreach ((array) $rules as $rule) {
-                    $this->implicitAttributes[$attribute][] = $key;
+                    $this->implicitAttributes[$attribute][] = strval($key);
 
                     $results = $this->mergeRules($results, $key, $rule);
                 }
@@ -186,57 +186,57 @@ class ValidationRuleParser
     /**
      * Extract the rule name and parameters from a rule.
      *
-     * @param  array|string  $rule
+     * @param  array|string  $rules
      * @return array
      */
-    public static function parse($rule)
+    public static function parse($rules)
     {
-        if ($rule instanceof RuleContract) {
-            return [$rule, []];
+        if ($rules instanceof RuleContract) {
+            return [$rules, []];
         }
 
-        if (is_array($rule)) {
-            $rule = static::parseArrayRule($rule);
+        if (is_array($rules)) {
+            $rules = static::parseArrayRule($rules);
         } else {
-            $rule = static::parseStringRule($rule);
+            $rules = static::parseStringRule($rules);
         }
 
-        $rule[0] = static::normalizeRule($rule[0]);
+        $rules[0] = static::normalizeRule($rules[0]);
 
-        return $rule;
+        return $rules;
     }
 
     /**
      * Parse an array based rule.
      *
-     * @param  array  $rule
+     * @param  array  $rules
      * @return array
      */
-    protected static function parseArrayRule(array $rule)
+    protected static function parseArrayRule(array $rules)
     {
-        return [Str::studly(trim(Arr::get($rule, 0, ''))), array_slice($rule, 1)];
+        return [Str::studly(trim(Arr::get($rules, 0))), array_slice($rules, 1)];
     }
 
     /**
      * Parse a string based rule.
      *
-     * @param  string  $rule
+     * @param  string  $rules
      * @return array
      */
-    protected static function parseStringRule($rule)
+    protected static function parseStringRule($rules)
     {
         $parameters = [];
 
         // The format for specifying validation rules and parameters follows an
         // easy {rule}:{parameters} formatting convention. For instance the
         // rule "Max:3" states that the value may only be three letters.
-        if (strpos($rule, ':') !== false) {
-            [$rule, $parameter] = explode(':', $rule, 2);
+        if (strpos($rules, ':') !== false) {
+            [$rules, $parameter] = explode(':', $rules, 2);
 
-            $parameters = static::parseParameters($rule, $parameter);
+            $parameters = static::parseParameters($rules, $parameter);
         }
 
-        return [Str::studly(trim($rule)), $parameters];
+        return [Str::studly(trim($rules)), $parameters];
     }
 
     /**

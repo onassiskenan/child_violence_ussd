@@ -5,9 +5,8 @@ namespace Illuminate\Auth\Middleware;
 use Closure;
 use Illuminate\Auth\AuthenticationException;
 use Illuminate\Contracts\Auth\Factory as Auth;
-use Illuminate\Contracts\Auth\Middleware\AuthenticatesRequests;
 
-class Authenticate implements AuthenticatesRequests
+class Authenticate
 {
     /**
      * The authentication factory instance.
@@ -65,20 +64,6 @@ class Authenticate implements AuthenticatesRequests
             }
         }
 
-        $this->unauthenticated($request, $guards);
-    }
-
-    /**
-     * Handle an unauthenticated user.
-     *
-     * @param  \Illuminate\Http\Request  $request
-     * @param  array  $guards
-     * @return void
-     *
-     * @throws \Illuminate\Auth\AuthenticationException
-     */
-    protected function unauthenticated($request, array $guards)
-    {
         throw new AuthenticationException(
             'Unauthenticated.', $guards, $this->redirectTo($request)
         );
@@ -88,7 +73,7 @@ class Authenticate implements AuthenticatesRequests
      * Get the path the user should be redirected to when they are not authenticated.
      *
      * @param  \Illuminate\Http\Request  $request
-     * @return string|null
+     * @return string
      */
     protected function redirectTo($request)
     {

@@ -2,13 +2,10 @@
 
 namespace Illuminate\Redis;
 
-use Closure;
+use InvalidArgumentException;
 use Illuminate\Contracts\Redis\Factory;
 use Illuminate\Redis\Connections\Connection;
-use Illuminate\Redis\Connectors\PhpRedisConnector;
-use Illuminate\Redis\Connectors\PredisConnector;
 use Illuminate\Support\ConfigurationUrlParser;
-use InvalidArgumentException;
 
 /**
  * @mixin \Illuminate\Redis\Connections\Connection
@@ -164,14 +161,14 @@ class RedisManager implements Factory
         $customCreator = $this->customCreators[$this->driver] ?? null;
 
         if ($customCreator) {
-            return $customCreator();
+            return call_user_func($customCreator);
         }
 
         switch ($this->driver) {
             case 'predis':
-                return new PredisConnector;
+                return new Connectors\PredisConnector;
             case 'phpredis':
-                return new PhpRedisConnector;
+                return new Connectors\PhpRedisConnector;
         }
     }
 
@@ -185,14 +182,8 @@ class RedisManager implements Factory
     {
         $parsed = (new ConfigurationUrlParser)->parseConfiguration($config);
 
-        $driver = strtolower($parsed['driver'] ?? '');
-
-        if (in_array($driver, ['tcp', 'tls'])) {
-            $parsed['scheme'] = $driver;
-        }
-
         return array_filter($parsed, function ($key) {
-            return ! in_array($key, ['driver'], true);
+            return ! in_array($key, ['driver', 'username'], true);
         }, ARRAY_FILTER_USE_KEY);
     }
 
@@ -238,26 +229,13 @@ class RedisManager implements Factory
     }
 
     /**
-     * Disconnect the given connection and remove from local cache.
-     *
-     * @param  string|null  $name
-     * @return void
-     */
-    public function purge($name = null)
-    {
-        $name = $name ?: 'default';
-
-        unset($this->connections[$name]);
-    }
-
-    /**
      * Register a custom driver creator Closure.
      *
      * @param  string  $driver
      * @param  \Closure  $callback
      * @return $this
      */
-    public function extend($driver, Closure $callback)
+    public function extend($driver, \Closure $callback)
     {
         $this->customCreators[$driver] = $callback->bindTo($this, $this);
 

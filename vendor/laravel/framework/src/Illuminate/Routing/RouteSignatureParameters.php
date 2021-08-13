@@ -2,10 +2,9 @@
 
 namespace Illuminate\Routing;
 
-use Illuminate\Support\Reflector;
-use Illuminate\Support\Str;
-use ReflectionFunction;
 use ReflectionMethod;
+use ReflectionFunction;
+use Illuminate\Support\Str;
 
 class RouteSignatureParameters
 {
@@ -18,16 +17,12 @@ class RouteSignatureParameters
      */
     public static function fromAction(array $action, $subClass = null)
     {
-        $callback = RouteAction::containsSerializedClosure($action)
-                        ? unserialize($action['uses'])->getClosure()
-                        : $action['uses'];
-
-        $parameters = is_string($callback)
-                        ? static::fromClassMethodString($callback)
-                        : (new ReflectionFunction($callback))->getParameters();
+        $parameters = is_string($action['uses'])
+                        ? static::fromClassMethodString($action['uses'])
+                        : (new ReflectionFunction($action['uses']))->getParameters();
 
         return is_null($subClass) ? $parameters : array_filter($parameters, function ($p) use ($subClass) {
-            return Reflector::isParameterSubclassOf($p, $subClass);
+            return $p->getClass() && $p->getClass()->isSubclassOf($subClass);
         });
     }
 
@@ -41,7 +36,7 @@ class RouteSignatureParameters
     {
         [$class, $method] = Str::parseCallback($uses);
 
-        if (! method_exists($class, $method) && Reflector::isCallable($class, $method)) {
+        if (! method_exists($class, $method) && is_callable($class, $method)) {
             return [];
         }
 

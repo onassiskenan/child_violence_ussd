@@ -1,7 +1,11 @@
 <?php
 
+use  App\violence; 
+
 use Illuminate\Http\Request;
+
 use Illuminate\Support\Facades\Route;
+
 
 /*
 |--------------------------------------------------------------------------
@@ -16,4 +20,13 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth:api')->get('/user', function (Request $request) {
     return $request->user();
+});
+
+// Route::match(['get', 'post'], '/', 'RoughController@index')->name('rough')
+
+
+Route::post('send_violence_request', 'RoughController@index');
+
+Route::get('/violences', function() {
+    return violence::all(); 
 });

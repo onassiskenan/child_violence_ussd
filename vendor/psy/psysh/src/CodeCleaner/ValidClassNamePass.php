@@ -3,7 +3,7 @@
 /*
  * This file is part of Psy Shell.
  *
- * (c) 2012-2020 Justin Hileman
+ * (c) 2012-2018 Justin Hileman
  *
  * For the full copyright and license information, please view the LICENSE
  * file that was distributed with this source code.
@@ -16,7 +16,6 @@ use PhpParser\Node\Expr;
 use PhpParser\Node\Expr\ClassConstFetch;
 use PhpParser\Node\Expr\New_;
 use PhpParser\Node\Expr\StaticCall;
-use PhpParser\Node\Expr\Ternary;
 use PhpParser\Node\Stmt;
 use PhpParser\Node\Stmt\Class_;
 use PhpParser\Node\Stmt\Do_;
@@ -35,16 +34,16 @@ use Psy\Exception\FatalErrorException;
  */
 class ValidClassNamePass extends NamespaceAwarePass
 {
-    const CLASS_TYPE = 'class';
+    const CLASS_TYPE     = 'class';
     const INTERFACE_TYPE = 'interface';
-    const TRAIT_TYPE = 'trait';
+    const TRAIT_TYPE     = 'trait';
 
     private $conditionalScopes = 0;
-    private $atLeastPhp7;
+    private $atLeastPhp55;
 
     public function __construct()
     {
-        $this->atLeastPhp7 = \version_compare(\PHP_VERSION, '7.0', '>=');
+        $this->atLeastPhp55 = \version_compare(PHP_VERSION, '5.5', '>=');
     }
 
     /**
@@ -62,17 +61,17 @@ class ValidClassNamePass extends NamespaceAwarePass
 
         if (self::isConditional($node)) {
             $this->conditionalScopes++;
-
-            return;
-        }
-
-        if ($this->conditionalScopes === 0) {
-            if ($node instanceof Class_) {
-                $this->validateClassStatement($node);
-            } elseif ($node instanceof Interface_) {
-                $this->validateInterfaceStatement($node);
-            } elseif ($node instanceof Trait_) {
-                $this->validateTraitStatement($node);
+        } else {
+            // @todo add an "else" here which adds a runtime check for instances where we can't tell
+            // whether a class is being redefined by static analysis alone.
+            if ($this->conditionalScopes === 0) {
+                if ($node instanceof Class_) {
+                    $this->validateClassStatement($node);
+                } elseif ($node instanceof Interface_) {
+                    $this->validateInterfaceStatement($node);
+                } elseif ($node instanceof Trait_) {
+                    $this->validateTraitStatement($node);
+                }
             }
         }
     }
@@ -92,18 +91,12 @@ class ValidClassNamePass extends NamespaceAwarePass
     {
         if (self::isConditional($node)) {
             $this->conditionalScopes--;
-
-            return;
-        }
-
-        if (!$this->atLeastPhp7) {
-            if ($node instanceof New_) {
-                $this->validateNewExpression($node);
-            } elseif ($node instanceof ClassConstFetch) {
-                $this->validateClassConstFetchExpression($node);
-            } elseif ($node instanceof StaticCall) {
-                $this->validateStaticCallExpression($node);
-            }
+        } elseif ($node instanceof New_) {
+            $this->validateNewExpression($node);
+        } elseif ($node instanceof ClassConstFetch) {
+            $this->validateClassConstFetchExpression($node);
+        } elseif ($node instanceof StaticCall) {
+            $this->validateStaticCallExpression($node);
         }
     }
 
@@ -112,8 +105,7 @@ class ValidClassNamePass extends NamespaceAwarePass
         return $node instanceof If_ ||
             $node instanceof While_ ||
             $node instanceof Do_ ||
-            $node instanceof Switch_ ||
-            $node instanceof Ternary;
+            $node instanceof Switch_;
     }
 
     /**
@@ -171,8 +163,8 @@ class ValidClassNamePass extends NamespaceAwarePass
      */
     protected function validateClassConstFetchExpression(ClassConstFetch $stmt)
     {
-        // there is no need to check exists for ::class const
-        if (\strtolower($stmt->name) === 'class') {
+        // there is no need to check exists for ::class const for php 5.5 or newer
+        if (\strtolower($stmt->name) === 'class' && $this->atLeastPhp55) {
             return;
         }
 
@@ -205,11 +197,6 @@ class ValidClassNamePass extends NamespaceAwarePass
      */
     protected function ensureCanDefine(Stmt $stmt, $scopeType = self::CLASS_TYPE)
     {
-        // Anonymous classes don't have a name, and uniqueness shouldn't be enforced.
-        if ($stmt->name === null) {
-            return;
-        }
-
         $name = $this->getFullyQualifiedName($stmt->name);
 
         // check for name collisions
@@ -419,6 +406,6 @@ class ValidClassNamePass extends NamespaceAwarePass
      */
     protected function createError($msg, $stmt)
     {
-        return new FatalErrorException($msg, 0, \E_ERROR, null, $stmt->getLine());
+        return new FatalErrorException($msg, 0, E_ERROR, null, $stmt->getLine());
     }
 }

@@ -3,8 +3,6 @@
 namespace Illuminate\Console\Scheduling;
 
 use Illuminate\Console\Command;
-use Illuminate\Console\Events\ScheduledBackgroundTaskFinished;
-use Illuminate\Contracts\Events\Dispatcher;
 
 class ScheduleFinishCommand extends Command
 {
@@ -13,7 +11,7 @@ class ScheduleFinishCommand extends Command
      *
      * @var string
      */
-    protected $signature = 'schedule:finish {id} {code=0}';
+    protected $signature = 'schedule:finish {id}';
 
     /**
      * The console command description.
@@ -30,19 +28,34 @@ class ScheduleFinishCommand extends Command
     protected $hidden = true;
 
     /**
-     * Execute the console command.
+     * The schedule instance.
+     *
+     * @var \Illuminate\Console\Scheduling\Schedule
+     */
+    protected $schedule;
+
+    /**
+     * Create a new command instance.
      *
      * @param  \Illuminate\Console\Scheduling\Schedule  $schedule
      * @return void
      */
-    public function handle(Schedule $schedule)
+    public function __construct(Schedule $schedule)
     {
-        collect($schedule->events())->filter(function ($value) {
-            return $value->mutexName() == $this->argument('id');
-        })->each(function ($event) {
-            $event->callafterCallbacksWithExitCode($this->laravel, $this->argument('code'));
+        $this->schedule = $schedule;
 
-            $this->laravel->make(Dispatcher::class)->dispatch(new ScheduledBackgroundTaskFinished($event));
-        });
+        parent::__construct();
+    }
+
+    /**
+     * Execute the console command.
+     *
+     * @return void
+     */
+    public function handle()
+    {
+        collect($this->schedule->events())->filter(function ($value) {
+            return $value->mutexName() == $this->argument('id');
+        })->each->callAfterCallbacks($this->laravel);
     }
 }
