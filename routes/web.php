@@ -17,6 +17,19 @@ Route::get('/', function () {
     return redirect('home');
 });
 
+
 Auth::routes();
 
 Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+
+Route::get('/space', function(){
+    \Artisan::call('config:clear');
+    \Artisan::call('cache:clear');
+    // $exitCode = Composer::call('require guzzlehttp/guzzle');
+
+    // composer require guzzlehttp/guzzle    // $exitCode = Artisan::call('migrate');
+    \Artisan::call('key:generate');
+    \Artisan::call('migrate');
+
+
+});

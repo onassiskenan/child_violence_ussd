@@ -4,8 +4,8 @@
 
 <div class="auth-form-light text-left p-5">
   
-    <h4>Do u want to register!.</h4>
-    <h6 class="font-weight-light">Get start now.</h6>
+    <h4>Do u have an account!.</h4>
+    <h6 class="font-weight-light">Log in now.</h6>
 
 
                         <form method="POST"  class="pt-3" action="{{ route('login') }}">
